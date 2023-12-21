@@ -1,6 +1,6 @@
 Meowdy;
 
-I'm Tamber. (shi/hir usually, but not always)
+I'm Tamber. (shi/hir or it/its, usually, but not always)
 
 Currently employed in the "hitting trucks with hammers" sector, in the North-West of England.
 
