@@ -1,0 +1,31 @@
+#!/bin/bash
+
+MIC_DEVICE="alsa_input.pci-0000_2f_00.4.analog-stereo"
+OUT_DEVICE="alsa_output.pci-0000_2f_00.4.analog-surround-51"
+IDS="/home/tamber/.soundboard"
+
+# Make a combination device, that we will point discord's 'microphone' device at.
+pactl load-module module-null-sink sink_name=CombinedInput sink_properties=device.description="CombinedInput" >> "${IDS}"
+
+# Microphone to the combined input.
+pactl load-module module-loopback source="${MIC_DEVICE}" sink=CombinedInput latency_msec=1 >> "${IDS}"
+
+# Hunt down Clementine
+MAYBE_CLEMENTINE=($(pactl list short clients | mawk 'tolower($3) ~ "clementine" {print $1}'))
+
+# Hunt for the stream ID.
+CLEMENTINE_ID=0
+for possible in ${MAYBE_CLEMENTINE[@]}; do
+    CLEMENTINE_ID=$(pactl list short sink-inputs | mawk -v check=$possible '$3 == check {print $1}')
+done
+
+pactl load-module module-combine-sink sink_name=MusicMerge slaves=${OUT_DEVICE},CombinedInput >> ${IDS}
+
+pactl move-sink-input ${CLEMENTINE_ID} MusicMerge
+
+
+#pactl load-module module-null-sink channel_map=front-left,front-right sink_name=SoundBoard >> "${IDS}"
+#pactl load-module module-loopback source=SoundBoard.monitor sink="${OUT}" latency_msec=1 >> "${IDS}"
+#pactl load-module module-loopback source=SoundBoard.monitor sink=CombinedInput latency_msec=1 >> "${IDS}"
+#pactl set-source-volume SoundBoard.monitor 50000
+#pactl set-source-volume "${MIC}" 60

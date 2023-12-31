@@ -1,0 +1,162 @@
+#!/bin/sh
+
+# Default gravities.
+gravity=SouthEast
+cc_gravity=SouthWest
+
+# Location of file used for watermarking.
+#watermark=/home/tamber/Video/Photato/BDC_potatography_watermark.png
+watermark=/home/tamber/Video/Photato/pixel-watermark.gif
+
+# Location of the various CC license 'buttons'
+#
+# This script uses the 80x15 versions, following the naming:
+# 'cc-<variant>-80x15.png', so the NC-SA variant would be:
+# 'cc-nc-sa-80x15.png'.
+cc_dir=/home/tamber/Video/Photato/CC/
+
+# Default resize operation
+resize="-resize 1280"
+
+# Set up our options parsing.
+eval set -- `getopt -o hnwg:r: --long help,no-resize,no-watermark,gravity:,cc-gravity:,\
+cc-by,cc-pd,cc-by-sa,cc-by-nc,cc-nc-sa,cc-by-nd,cc-by-nd-nc,cc-by-nd-sa,cc-by-nc-sa, -- "$@"`
+
+# Non-helpful usage thing when the user gives us an option we don't recognise.
+usage() {
+    echo "Usage: $0 [-nh ] [ -g <watermark gravity> ] [ --cc-<licence> [ -r <cc watermark gravity> ]] <file(s)>" 1>&2
+}
+
+# Help text, for after the user has received the non-helpful usage
+# message, and is now trying to figure out how to make the bastard
+# thing work.
+help() {
+    cat 1>&2 <<-END
+Usage: $0 [option(s)] <file(s)>
+
+ 'Webify' a photograph or photographs for uploading. The output files
+ will be named by prepending 'web' to the input filename.
+ (Webification comprises of resizing, adding a watermark, and
+ optionally adding a CreativeCommons license watermark)
+
+ The options are:
+   -h | --help:		This help text.
+   -n | --no-resize:   	Don't resize the image.
+   -w | --no-watermark: Don't watermark the image
+   -g | --gravity:     	Set which corner of the image the watermark gravitates to.
+                       	Choices are: North, NorthEast, East, SouthEast, South,
+                       	SouthWest, West, NorthWest, and Center
+   -- The Various Creative Commons License Options --
+   --cc-by:             Attribution
+   --cc-pd:            	No Rights Reserved
+   --cc-by-sa:         	Attribution-ShareAlike
+   --cc-by-nc:         	Attribution-NonCommercial
+   --cc-nc-sa:         	NonCommercial-ShareAlike
+   --cc-by-nd:         	Attribution-NoDerivs
+   --cc-by-nd-nc:      	Attribution-NoDerivs-NonCommercial
+   --cc-by-nd-sa:      	Attribution-NoDerivs-ShareAlike
+   --cc-by-nc-sa:      	Attribution-NonCommercial-ShareAlike
+   --cc-by-nc:         	Attribution-NonCommercial
+
+   -r | --cc-gravity:  Set which corner of the image the cc button gravitates to.
+                       Choices are the same as gravity for the main watermark.
+
+  See https://creativecommons.org/licenses for further information and
+  guidance on what license to use, and what rights each one gives you.
+
+END
+}
+
+# Chew through our options. Yeah, you don't get much choice in which
+# CC buttons to use, oh well.
+while true ; do
+    case "$1" in
+	-n|--no-resize)
+	    resize=""; shift;;
+	-w|--no-watermark)
+	    watermark="/home/tamber/Video/Photato/Blank_Watermark.png"; shift;;
+	--cc-by)
+	    cc_wm="${cc_dir}/cc-by-80x15.png"; shift;;
+	--cc-pd)
+	    cc_wm="${cc_dir}/cc-pd-80x15.png"; shift;;
+	--cc-by-sa)
+	    cc_wm="${cc_dir}/cc-by-sa-80x15.png"; shift;;
+	--cc-by-nc)
+	    cc_wm="${cc_dir}/cc-by-nc-80x15.png"; shift;;
+	--cc-nc-sa)
+	    cc_wm="${cc_dir}/cc-nc-sa-80x15.png"; shift;;
+	--cc-by-nd)
+	    cc_wm="${cc_dir}/cc-by-nd-80x15.png"; shift;;
+	--cc-by-nd-nc)
+	    cc_wm="${cc_dir}/cc-by-nd-nc-80x15.png"; shift;;
+	--cc-by-nc-sa)
+	    cc_wm="${cc_dir}/cc-by-nc-sa-80x15.png"; shift;;
+	--cc-by-nc)
+	    cc_wm="${cc_dir}/cc-by-nc-80x15.png"; shift;;
+	-g|--gravity)
+	    gravity=$2; shift 2;;
+	-r|--cc-gravity)
+	    cc_gravity=$2; shift 2;;
+	-h|--help)
+	    help; exit 1; ;;
+	--) shift; break;;
+	* ) usage; exit 1; ;;
+    esac
+done
+
+# If we have a Creative Commons watermark to use, then lets prepare ourselves to use it.
+# The explanation for the options is down in the doobly-do.
+if [ $cc_wm ]
+then
+    cc_marking="${cc_wm} -gravity ${cc_gravity} -compose src-over -composite"
+else
+    # ...otherwise, do nothing for this.
+    cc_marking=""
+fi
+
+for input in "$@"
+do
+    # Does the input file exist? If not, then warn about it and move to the next one.
+    if [ ! -f "$input" ]
+    then
+	echo "Could not find: $input" 1>&2
+	continue
+    fi
+
+    # Set our output file-name
+    output="web-$input"
+    # Okay, so now onto the (mystery-)meat of the image mangulation:
+    #
+    # * We have our input file; if it's going to be resized, that's
+    #   done before the watermark file.
+    #
+    # * The watermark file is scaled down to 25% of the width of the
+    #   (resized, if that's happening) main input file.  (That's the
+    #   funky 'distort' expression.)
+    #  +distort SRT "%[fx:t==0?1:(u.w * 0.25)/v.w] 0"
+    #
+    # * The scaled down watermark is then pushed to whichever corner
+    #   we want it in, via the gravity argument.
+    #
+    # * A 'blend' compose method is selected, with a 50/50 mix of
+    #   original image and watermark image. Adjust the '50' in the
+    #   args thing to make it more or less transparent.
+    #
+    # * The two images (input and watermark) are then composited
+    #   together.
+    #
+    # * If we're doing any CC marking, then this is applied after the
+    #   previous composite. It will take the appropriate CC button
+    #   input file, push it to the specified corner, set it to
+    #   straight up paste it over (the 'src-over' composition method),
+    #   then commit with a composite operation.
+    #
+    #   This could also be set to use a blend method, just like the
+    #   main watermark, but I didn't feel like it.
+    convert ${input} $resize ${watermark}  -gravity ${gravity}\
+	    -compose blend -define compose:args=100 -composite ${cc_marking} ${output}
+
+    # And, for completeness, tell the user when we've done each file
+    # so that they know some progress is happening.
+    echo "> $output" 1>&2
+done
