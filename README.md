@@ -1,6 +1,6 @@
 Meowdy;
 
-I'm Tamber. (shi/hir or it/its, usually, but not always)
+I'm Tamber. (she/her, it/its, or they/them. usually, but not always. Other options are available, but I'll think you're a bit shit for using he/him.)
 
 Currently employed in the "hitting trucks with hammers" sector, in the North-West of England.
 
